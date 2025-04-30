@@ -1,4 +1,4 @@
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::{Display, Formatter};
 use strum::{EnumMessage, EnumProperty};
 
 use zellij_tile::prelude::{ui_components::*, CommandToRun, FileToOpen, Palette};
@@ -199,6 +199,10 @@ impl Display for ActionList {
 
 impl Display for State {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        if !self.is_ready() {
+            writeln!(f, "Cannot start command, still retrieving state")?;
+        }
+
         // Use the user’s theme
         write!(f, "{}", self.render_action_line())?;
         // TODO: Only print the control line when its options are usefull… or remove it entirely to integrate the options in the command actions

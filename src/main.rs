@@ -7,23 +7,29 @@ use strum::EnumMessage;
 use zellij_tile::prelude::*;
 
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-#[derive(Default)]
+const OWN_URL: &str = "zellij:OWN_URL";
+
+#[derive(Debug, Default)]
 struct DisplaySize {
     rows: usize,
     columns: usize,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct ZellijState {
+    auto_execute_when_ready: VecDeque<PipeMessage>,
+    permission_granted: bool,
     // current_session: SessionInfo,
     // mode_info: ModeInfo,
     // current_tab: TabInfo,
     // last_pane: PaneManifest,
+    client_list: Vec<ClientInfo>,
+    current_client_id: Option<ClientId>,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct State {
     action: Action,
     should_open_floating: bool,
@@ -45,14 +51,18 @@ impl ZellijPlugin for State {
             PermissionType::ReadCliPipes,
             PermissionType::RunCommands,
         ]);
+
         subscribe(&[
             EventType::Key,
+            EventType::ListClients,
             // EventType::ModeUpdate,
             // EventType::PaneUpdate,
+            EventType::PermissionRequestResult,
             // EventType::SessionUpdate,
             // EventType::TabUpdate,
         ]);
 
+        eprintln!("Just loaded");
         // TODO: This may change as I’m not convinced the `configuration`’s API is good for this
         // self.action
         //     .set(configuration.get("command").unwrap_or(&Default::default()));
@@ -61,10 +71,30 @@ impl ZellijPlugin for State {
     fn update(&mut self, event: Event) -> bool {
         let mut should_render = false;
 
+        eprintln!("update {event:?}");
+
         match event {
             Event::Key(key) => {
                 self.handle_key(key);
                 should_render = true;
+            }
+            Event::ListClients(clients) => {
+                self.zellij_state.client_list = clients;
+                self.zellij_state.current_client_id =
+                    self.zellij_state.client_list.iter().find_map(|c| {
+                        if c.is_current_client {
+                            Some(c.client_id)
+                        } else {
+                            None
+                        }
+                    });
+                eprintln!("New current ID {:?}", self.zellij_state.current_client_id);
+
+                if self.is_ready() {
+                    if let Some(message) = self.zellij_state.auto_execute_when_ready.pop_front() {
+                        should_render = self.handle_pipe(&message);
+                    }
+                }
             }
             // Event::ModeUpdate(mode_info) => {
             //     self.mode_info = mode_info;
@@ -74,8 +104,13 @@ impl ZellijPlugin for State {
             //     self.last_pane = pane_info;
             //     // should_render = true;
             // }
-            Event::PermissionRequestResult(_status) => {
-                // should_render = true;
+            Event::PermissionRequestResult(PermissionStatus::Granted) => {
+                self.zellij_state.permission_granted = true;
+
+                list_clients();
+            }
+            Event::PermissionRequestResult(status) => {
+                todo!("Handle receiving permission: {status:?}, aborting for now");
             }
             // Event::SessionUpdate(sessions_info, _resurrectable_sessions) => {
             //     sessions_info.iter().for_each(|s| {
@@ -103,12 +138,83 @@ impl ZellijPlugin for State {
     }
 
     fn pipe(&mut self, pipe_message: PipeMessage) -> bool {
-        let mut should_render = false; // TODO: needed sometimes? apparently not since changing the action already update the interface… but check it… (if needed add when `set`ting the action?)
-        let interface = Interface::Pipe;
+        self.handle_pipe(&pipe_message)
+    }
 
-        eprintln!("received message from pipe {:#?}", pipe_message);
+    fn render(&mut self, rows: usize, cols: usize) {
+        self.change_size(rows, cols);
+        print!("{}", self);
+    }
+}
 
-        // TODO: accept/refuse depending on source and current status (already a command being written, …)
+impl State {
+    fn handle_key(&mut self, key: KeyWithModifier) {
+        match key {
+            KeyWithModifier {
+                bare_key: BareKey::Down,
+                key_modifiers: _,
+            } => self.action.selection_down(),
+            KeyWithModifier {
+                bare_key: BareKey::Up,
+                key_modifiers: _,
+            } => self.action.selection_up(),
+            KeyWithModifier {
+                bare_key: BareKey::Enter,
+                key_modifiers: _,
+            } => self.start_action(None),
+            // Key::BackTab => self.open_search_result_in_terminal(),
+            KeyWithModifier {
+                bare_key: BareKey::Char('f'),
+                key_modifiers: modifiers,
+            } if modifiers == BTreeSet::from([KeyModifier::Ctrl]) => {
+                self.should_open_floating = !self.should_open_floating
+            }
+            KeyWithModifier {
+                bare_key: BareKey::Char('e'),
+                key_modifiers: modifiers,
+            } if modifiers == BTreeSet::from([KeyModifier::Ctrl]) => self.search_filter.progress(), // TODO: should also be a toggelable bool
+            // Key::Esc | Key::Ctrl('c') => {
+            //     if !self.search_term.is_empty() {
+            //         self.clear_state();
+            //     } else {
+            //         hide_self();
+            //     }
+            // }
+            _ => self.append_to_search_term(key),
+        }
+    }
+
+    fn handle_pipe(&mut self, pipe_message: &PipeMessage) -> bool {
+        let should_render = false; // TODO: needed sometimes? apparently not since changing the action already update the interface… but check it… (if needed add when `set`ting the action?)
+        const INTERFACE_PIPE: Interface = Interface::Pipe;
+
+        let my_client_id = match self.zellij_state.current_client_id {
+            Some(id) => id,
+            None => {
+                self.zellij_state
+                    .auto_execute_when_ready
+                    .push_back(pipe_message.to_owned());
+                return should_render;
+            }
+        };
+
+        // Sent by us, ignore
+        if let Some(pipe_client_id) = pipe_message.args.iter().find(|a| a.0 == "client_id") {
+            let pipe_client_id: ClientId = pipe_client_id.1.parse().unwrap_or_default();
+            eprintln!(
+                "{pipe_client_id} ?= {:?}",
+                self.zellij_state.current_client_id
+            );
+            if pipe_client_id == my_client_id {
+                eprintln!("Ignore message from pipe: same client");
+                return should_render;
+            }
+        }
+
+        eprintln!(
+            "received message from pipe (not ignored) {:#?}",
+            pipe_message
+        );
 
         // TODO: add an arg to choose between
         //     1) <Default> Don’t replace the text in the openned plugin + run immediatly
@@ -126,10 +232,12 @@ impl ZellijPlugin for State {
         //     * The `-c, --plugin-configuration <PLUGIN_CONFIGURATION>` can be used (currently with any config, since it is not used) to always create a new plugin and found yourself in the first scenario.
 
         if let Some(command) = &pipe_message.payload {
-            self.action.set(command, &interface)
+            self.action.set(command, &INTERFACE_PIPE)
         } else if let Some(command) = pipe_message.args.get("command") {
-            self.action.set(command, &interface)
+            self.action.set(command, &INTERFACE_PIPE)
         };
+
+        eprintln!("Received action: {}", self.action.command());
 
         let force = pipe_message.args.get("force_available").is_some(); // TODO: just "force"?
         let res = format!("{}", self.action.action());
@@ -141,19 +249,22 @@ impl ZellijPlugin for State {
                 calling_interface,
             } = self.action.action()
             {
+                eprintln!("Just force: {action}");
                 let res = format!("{}", action);
                 self.start_action(Some((**action).clone()));
                 res
             } else {
+                eprintln!("Just available");
                 self.start_action(None);
                 res
             }
         } else {
+            eprintln!("Just execute");
             self.start_action(None);
             res
         };
 
-        match pipe_message.source {
+        match &pipe_message.source {
             PipeSource::Cli(pipe_name) => {
                 cli_pipe_output(&pipe_name, &format!("{res}\n"));
 
@@ -179,7 +290,7 @@ impl ZellijPlugin for State {
                 // }
             }
             PipeSource::Plugin(_) | PipeSource::Keybind => {
-                eprintln!("Received message {:#?}", pipe_message)
+                eprintln!("Received (and executed) message {:#?}", pipe_message)
             }
         }
 
@@ -187,47 +298,24 @@ impl ZellijPlugin for State {
         should_render
     }
 
-    fn render(&mut self, rows: usize, cols: usize) {
-        self.change_size(rows, cols);
-        print!("{}", self);
-    }
-}
-
-impl State {
-    pub fn handle_key(&mut self, key: Key) {
-        match key {
-            Key::Down => self.action.selection_down(),
-            Key::Up => self.action.selection_up(),
-            Key::Char('\n') => self.start_action(None),
-            // Key::BackTab => self.open_search_result_in_terminal(),
-            Key::Ctrl('f') => {
-                self.should_open_floating = !self.should_open_floating;
-            }
-            Key::Ctrl('e') => self.search_filter.progress(), // TODO: should also be a toggelable bool
-            // Key::Esc | Key::Ctrl('c') => {
-            //     if !self.search_term.is_empty() {
-            //         self.clear_state();
-            //     } else {
-            //         hide_self();
-            //     }
-            // }
-            _ => self.append_to_search_term(key),
-        }
+    fn is_ready(&self) -> bool {
+        self.zellij_state.permission_granted && self.zellij_state.current_client_id.is_some()
     }
 
-    pub fn change_size(&mut self, rows: usize, cols: usize) {
+    fn change_size(&mut self, rows: usize, cols: usize) {
         self.display.rows = rows;
         self.display.columns = cols;
     }
 
-    fn append_to_search_term(&mut self, key: Key) {
+    fn append_to_search_term(&mut self, key: KeyWithModifier) {
         let interface = Interface::Pane; // TODO: receive from parameter?
 
-        match key {
-            Key::Char(character) => {
+        // TODO: use modifiers?
+        match key.bare_key {
+            BareKey::Char(character) => {
                 self.action.push(character, &interface);
             }
-            Key::Backspace => {
+            BareKey::Backspace => {
                 self.action.pop(&interface);
                 if self.action.len() == 0 {
                     // self.clear_state();
@@ -241,6 +329,16 @@ impl State {
         let interface = Interface::Pane; // TODO: receive from parameter?
         let action = override_action.unwrap_or_else(|| self.action.action().clone());
         let mut done = true;
+
+        eprintln!("start_action {action:#?}");
+
+        if !self.is_ready() {
+            eprintln!(
+                "Not ready to execute command immediately: Not retrieve the whole needed state"
+            );
+            return;
+        }
+
         match action {
             // ActionList::ClearScreen => {
             //     // TODO: Clear applies on the focused pane, focus to the previous one before clearing the screen/scrollback
@@ -263,13 +361,27 @@ impl State {
                     eprintln!("send message to pipe DE");
                     pipe_message_to_plugin(
                         MessageToPlugin::new("message_name")
-                            .with_plugin_url("zellij::OWN_URL")
-                            .with_payload(self.action.command()),
+                            .with_plugin_url(OWN_URL)
+                            .with_payload("DetachMe")
+                            .with_args(BTreeMap::from([
+                                (
+                                    String::from("client_id"),
+                                    self.zellij_state
+                                        .current_client_id
+                                        .expect("Client ID is present since we are ready")
+                                        .to_string(),
+                                ),
+                                (String::from("force_available"), String::new()),
+                            ])),
                     );
                 }
                 detach();
             }
             ActionList::DetachMe => {
+                eprintln!(
+                    "Detaching me, client ID: {}",
+                    self.zellij_state.current_client_id.unwrap()
+                );
                 detach();
             }
             ActionList::DetachOthers => {
@@ -278,9 +390,20 @@ impl State {
                     eprintln!("send message to pipe DO");
                     pipe_message_to_plugin(
                         MessageToPlugin::new("message_name")
-                            .with_plugin_url("zellij::OWN_URL")
-                            .with_payload(self.action.command()),
+                            .with_plugin_url(OWN_URL)
+                            .with_payload("DetachMe")
+                            .with_args(BTreeMap::from([
+                                (
+                                    String::from("client_id"),
+                                    self.zellij_state
+                                        .current_client_id
+                                        .expect("Client ID is present since we are ready")
+                                        .to_string(),
+                                ),
+                                (String::from("force_available"), String::new()),
+                            ])),
                     );
+                    eprintln!("sent message to pipe DO");
                 }
             }
             // ActionList::EditScrollback => {
@@ -300,9 +423,9 @@ impl State {
                 };
 
                 if self.should_open_floating {
-                    open_file_floating(file, None); // TODO: Make it possible to provide the coordinates
+                    open_file_floating(file, None, BTreeMap::default()); // TODO: Make it possible to provide the coordinates & context
                 } else {
-                    open_file(file);
+                    open_file(file, BTreeMap::default()); // TODO: Make it possible to provide context
                 }
             }
             ActionList::NewPane { path } => {
@@ -328,9 +451,9 @@ impl State {
                 let cmd = CommandToRun { path, args, cwd };
 
                 if self.should_open_floating {
-                    open_command_pane_floating(cmd, None); // TODO: Make it possible to provide the coordinates
+                    open_command_pane_floating(cmd, None, BTreeMap::default()); // TODO: Make it possible to provide the coordinates & context
                 } else {
-                    open_command_pane(cmd);
+                    open_command_pane(cmd, BTreeMap::default()); // TODO: Make it possible to provide context
                 }
             }
 
@@ -373,7 +496,7 @@ impl State {
     }
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub enum EnvironmentFrom {
     #[default]
     ZellijSession,
