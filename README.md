@@ -1,6 +1,6 @@
 ## About
 
-This is an console plugin for [Zellij][zellij] written in Rust. It aim at exposing zellij’s functionnality through a plugin. The plugin interface have the particularity to be user aware unlike the command line interface.
+This is an shell plugin for [Zellij][zellij] written in Rust. It aim at exposing zellij’s functionnality through a plugin. The plugin interface have the particularity to be user aware unlike the command line interface.
 
 More about Zellij plugins: [Zellij Documentation][docs]
 

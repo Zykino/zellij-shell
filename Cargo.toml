@@ -1,5 +1,5 @@
 [package]
-name = "zellij-console"
+name = "zellij-shell"
 version = "0.1.0"
 authors = ["Zykino <>"]
 edition = "2021"

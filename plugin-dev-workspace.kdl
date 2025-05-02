@@ -1,5 +1,5 @@
 layout {
-    tab name="Zellij-Console" {
+    tab name="Zellij-Shell" {
         pane size=1 borderless=true {
             plugin location="zellij:compact-bar"
         }
@@ -12,13 +12,24 @@ layout {
                 }
             }
             pane stacked=true {
-                pane {
-                    plugin location="zc"
-                }
                 pane command="gitui" {
                      start_suspended true
                 }
                 pane
+            }
+        }
+        floating_panes {
+            pane {
+                plugin location="zh"
+                x 1
+                y 2
+            }
+            pane command="tail" name="logs" {
+                args "-f" "/tmp/zellij-1000/zellij-log/zellij.log"
+                width "80%"
+                height "70%"
+                x "100%"
+                y "100%"
             }
         }
     }

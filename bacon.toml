@@ -66,7 +66,7 @@ on_success = "back" # so that we don't open the browser at each change
 
 [jobs.start-or-reload-plugin]
 command = [
-    "zellij", "action", "start-or-reload-plugin", "file:/mnt/Data/Code/Target/Cargo/wasm32-wasip1/debug/zellij-console.wasm"
+    "zellij", "action", "start-or-reload-plugin", "file:/mnt/Data/Code/Target/Cargo/wasm32-wasip1/debug/zellij-shell.wasm"
 ]
 
 # You can run your application and have the result displayed in bacon,
@@ -116,3 +116,4 @@ allow_warnings = true
 [keybindings]
 # alt-m = "job:my-job"
 c = "job:clippy-all" # comment this to have 'c' run clippy on only the default target
+# r = "job:run-long"
