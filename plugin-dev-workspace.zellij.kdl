@@ -22,10 +22,10 @@ layout {
             pane {
                 plugin location="zh"
                 x 1
-                y 2
+                y 3
             }
-            pane command="tail" name="logs" {
-                args "-f" "/tmp/zellij-1000/zellij-log/zellij.log"
+            pane command="lnav" name="logs" {
+                args "/tmp/zellij-1000/zellij-log/zellij.log"
                 width "80%"
                 height "70%"
                 x "100%"
