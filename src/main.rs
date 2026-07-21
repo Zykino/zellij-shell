@@ -94,6 +94,8 @@ impl ZellijPlugin for State {
                     if let Some(message) = self.zellij_state.auto_execute_when_ready.pop_front() {
                         should_render = self.handle_pipe(&message);
                     }
+                } else if self.zellij_state.current_client_id.is_none() {
+                    list_clients();
                 }
             }
             // Event::ModeUpdate(mode_info) => {

@@ -179,7 +179,7 @@ pub(crate) enum ActionList {
         serialize = "New_Pane",
         serialize = "np"
     )]
-    NewPane { path: String },
+    NewPane { path: String }, // TODO: add a way to call `new_tiled_pane_in_tab()`
     #[strum(
         props(Interface = "Pane"), // The cli does not know who wrote the command or who pressed `Enter` --> The edit will be done by every users
     )]

@@ -225,7 +225,7 @@ impl State {
             "{} {}{}\n{}\n",
             serialize_text(&Text::new("PROMPT:").color_range(1, 0..6)),
             self.action.as_str(),
-            styled_text_background(WHITE, " "), // "Cursor" representation
+            styled_text_background(WHITE, " "), // "Cursor" representation // TODO: use the new `show_cursor` instead. This will allow to edit the prompt line like in any shell (as long as we keep the cursor's coord). An advanced version would even let us jump from the prompt line to the other previews.
             self.action.action(),
         )
     }
