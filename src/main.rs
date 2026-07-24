@@ -79,6 +79,7 @@ impl ZellijPlugin for State {
                 should_render = true;
             }
             Event::ListClients(clients) => {
+                should_render = true;
                 self.zellij_state.client_list = clients;
                 self.zellij_state.current_client_id =
                     self.zellij_state.client_list.iter().find_map(|c| {
@@ -108,6 +109,7 @@ impl ZellijPlugin for State {
             // }
             Event::PermissionRequestResult(PermissionStatus::Granted) => {
                 self.zellij_state.permission_granted = true;
+                should_render = true;
 
                 list_clients();
             }
