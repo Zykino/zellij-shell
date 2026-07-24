@@ -96,6 +96,7 @@ impl ZellijPlugin for State {
                         should_render = self.handle_pipe(&message);
                     }
                 } else if self.zellij_state.current_client_id.is_none() {
+                    // BUG: This is because zellij does not give the list until we un-select and re-select the plugin… Might be a more user-friendly workaround to do that instead of loop requesting hopping to get the value we need. See: https://github.com/zellij-org/zellij/issues/5413
                     list_clients();
                 }
             }
