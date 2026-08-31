@@ -11,7 +11,7 @@ use zellij_tile::prelude::{CommandToRun, FileToOpen};
 use crate::action::builtin::{BuiltinFactoryFull, BuiltinFull};
 
 // TODO@Errors: Do not use `&str`
-const INVALID_ACTION_ERR_VALUE: &str = " is not a valid command";
+const INVALID_ACTION_ERR_VALUE: &str = "is not a valid command";
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub(crate) enum Selection {
@@ -467,12 +467,17 @@ impl CAction {
     // Emulate a `String`
     pub fn push(&mut self, charactere: char, interface: &Interface) {
         self.raw.push(charactere);
-        self.parsed = Some(ParsedAction::from(self.raw.clone()));
+
+        // TODO@Cache: Cache value and only re-compute builtin to use if the command change. Maybe still pass args dynamically
+        *self = Self::from(self.raw.clone())
     }
 
     pub fn pop(&mut self, interface: &Interface) -> Option<char> {
         let res = self.raw.pop();
-        self.parsed = Some(ParsedAction::from(self.raw.clone()));
+
+        // TODO@Cache: Cache value and only re-compute builtin to use if the command change. Maybe still pass args dynamically
+        *self = Self::from(self.raw.clone());
+
         res
     }
 
@@ -496,6 +501,7 @@ impl CAction {
 
     // TODO@Correctness: take ownership of self no?
     pub fn build_action<'a>(&self) -> Result<Box<dyn BuiltinFull>, &'a str> {
+        dbg!(self.builtin_factory);
         match self.builtin_factory {
             Some(factory) => factory.try_from(self),
             None => Err(INVALID_ACTION_ERR_VALUE),
@@ -505,7 +511,7 @@ impl CAction {
 
 impl From<String> for CAction {
     fn from(value: String) -> Self {
-        let parsed = ParsedAction::try_from(value.clone()).unwrap_or_default();
+        let parsed = ParsedAction::from(value.clone());
         CAction {
             raw: value,
             builtin_factory: find_builtin(&parsed),

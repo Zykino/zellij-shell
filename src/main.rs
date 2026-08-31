@@ -154,7 +154,7 @@ impl ZellijPlugin for State {
             Ok(b) => print!("{:?}", b),
             // TODO@Visuals: Use `Text` to format the error message
             // TODO@Errors: This string construction feels strange here: we know which message we are about to get
-            Err(e) => print!("ERR: `{r:?}` {e:?}"),
+            Err(e) => print!("ERR: `{r}` {e}"),
         }
     }
 }
