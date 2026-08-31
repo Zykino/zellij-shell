@@ -5,10 +5,18 @@ authors = ["Zykino <>"]
 edition = "2021"
 
 [dependencies]
+# TODO@Dependencies: trim them (only keep zellij-tile?). Since the rewrite from enum to components `strum is definitely not useful anymore`
 ansi_term = "0.12.1"
 chrono = "0.4.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 strum = "0.25"
 strum_macros = "0.25"
-zellij-tile = "0.44"
+zellij-tile = "0.45"
+
+# # To property/fuzz test see: https://docs.rs/arbtest/0.3.2/arbtest/
+# arbitrary = { version = "1.4.2", features = ["derive"] }
+
+[dev-dependencies]
+arbtest = "0.3.2"
+exhaustigen = "0.1.0"

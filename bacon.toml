@@ -9,7 +9,7 @@ default_job = "check"
 env.CARGO_TERM_COLOR = "always"
 
 [jobs.check]
-command = ["cargo", "check"]
+command = ["cargo", "check", "--target=wasm32-wasip1"]
 need_stdout = false
 
 [jobs.check-all]
@@ -18,7 +18,7 @@ need_stdout = false
 
 # Run clippy on the default target
 [jobs.clippy]
-command = ["cargo", "clippy"]
+command = ["cargo", "clippy", "--target=wasm32-wasip1"]
 need_stdout = false
 
 # Run clippy on all targets
@@ -73,7 +73,7 @@ command = [
 # if it makes sense for this crate.
 [jobs.run]
 command = [
-    "cargo", "build", "--quiet"
+    "cargo", "build", "--quiet", "--target=wasm32-wasip1"
     # put launch parameters for your program behind a `--` separator
 ]
 need_stdout = true
@@ -91,7 +91,7 @@ on_success="job:start-or-reload-plugin"
 # a binding `r = job:run-long` at the end of this file .
 [jobs.run-long]
 command = [
-    "cargo", "build", "--quiet"
+    "cargo", "build", "--quiet", "--target=wasm32-wasip1"
     # put launch parameters for your program behind a `--` separator
 ]
 need_stdout = true
